@@ -1,4 +1,4 @@
-# flutter_app
+# Flutter Multi-Screen App
 
 A Flutter multi-screen demo application built for classroom-style learning and practice.
 It demonstrates a simple registration and login flow, an authenticated dashboard,
