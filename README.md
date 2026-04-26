@@ -28,6 +28,18 @@ All user data is stored temporarily in memory through a singleton controller.
 - Material 3 UI with a consistent purple-themed design.
 - Named-route navigation between screens.
 
+## App Screenshots
+
+<p align="center">
+  <img src="app_ss/Register.png" width="45%" />
+  <img src="app_ss/Login.png" width="45%" />
+</p>
+
+<p align="center">
+  <img src="app_ss/Dashboard.png" width="45%" />
+  <img src="app_ss/Course_Detail.png" width="45%" />
+</p>
+
 ## Tech Stack
 
 - Flutter SDK
