@@ -1,9 +1,15 @@
-# Flutter Multi-Screen App
+# Project Title - Flutter Multi-Screen App
 
 A Flutter multi-screen demo application built for classroom-style learning and practice.
 It demonstrates a simple registration and login flow, an authenticated dashboard,
 and a detail screen for course/subject information. The project is intentionally
 lightweight and uses in-memory state, which makes it easy to understand and extend.
+
+# Student Info
+
+Name: Hammad
+
+Registration ID: SE-221046
 
 ## Overview
 
@@ -216,22 +222,6 @@ You can target Android, iOS, web, Windows, macOS, or Linux depending on your loc
 ```bash
 flutter test
 ```
-
-## Notes on the Current Codebase
-
-- The app is currently a teaching/demo project, not a production auth system.
-- User data is not persisted across app launches.
-- The default test file still contains Flutter’s template counter test and can be replaced with app-specific tests.
-- There are no image assets wired into the subject model yet, even though `SubjectModel` contains an `imageUrl` field.
-
-## Suggested Next Improvements
-
-If you want to evolve the project, the most useful next steps would be:
-
-1. Replace in-memory auth with local persistence or a backend service.
-2. Add app-specific widget tests for registration, login, and dashboard navigation.
-3. Remove unused model fields or connect them to real assets.
-4. Introduce a state-management solution if the app grows beyond the current scope.
 
 ## Documentation References
 
