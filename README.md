@@ -67,9 +67,9 @@ Note: JSONPlaceholder is a fake REST API. Requests return success responses for 
 </p>
 
 <p align="center">
-  <img src="app_ss/Update_Course.png" width="33%" />
-  <img src="app_ss/Course_Detail.png" width="33%" />
-  <img src="app_ss/Delete_Course.png" width="33%" />
+  <img src="app_ss/Update_Course.png" width="45%" />
+  <img src="app_ss/Course_Detail.png" width="45%" />
+  <img src="app_ss/Delete_Course.png" width="45%" />
 </p>
 
 ## Tech Stack
