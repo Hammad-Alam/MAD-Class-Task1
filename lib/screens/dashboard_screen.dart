@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../controllers/auth_controller.dart';
+import '../enums/course_state.dart';
 import '../models/course_model.dart';
-import '../services/course_api_service.dart';
+import '../providers/course_provider.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -13,12 +15,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final _authController = AuthController();
-  final _courseApiService = CourseApiService();
-
-  List<CourseModel> _courses = [];
-  bool _isLoading = true;
-  bool _isSubmitting = false;
-  String? _errorMessage;
+  final _searchController = TextEditingController();
 
   final List<IconData> _courseIcons = [
     Icons.phone_android,
@@ -41,38 +38,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchCourses();
+    // Trigger initial fetch via the provider.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CourseProvider>().fetchCourses();
+    });
   }
 
-  Future<void> _fetchCourses() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final courses = await _courseApiService.fetchCourses(limit: 20);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _courses = courses;
-      });
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _errorMessage = e.toString();
-      });
-    } finally {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isLoading = false;
-      });
-    }
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _showCourseForm({CourseModel? existing}) async {
@@ -81,50 +56,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
       builder: (context) => _CourseFormDialog(existing: existing),
     );
 
-    if (formResult == null) {
-      return;
+    if (formResult == null) return;
+
+    final provider = context.read<CourseProvider>();
+
+    if (existing == null) {
+      await provider.addCourse(
+        CourseModel(
+          userId: _authController.currentUser != null ? 1 : null,
+          title: formResult.title,
+          description: formResult.description,
+        ),
+      );
+      _showMessage(
+        provider.errorMessage ?? 'Course added successfully.',
+        isError: provider.errorMessage != null,
+      );
+    } else {
+      final updated = existing.copyWith(
+        title: formResult.title,
+        description: formResult.description,
+      );
+      await provider.updateCourse(existing, updated);
+      _showMessage(
+        provider.errorMessage ?? 'Course updated successfully.',
+        isError: provider.errorMessage != null,
+      );
     }
-
-    await _runSubmission(() async {
-      if (existing == null) {
-        final created = await _courseApiService.addCourse(
-          CourseModel(
-            userId: _authController.currentUser != null ? 1 : null,
-            title: formResult.title,
-            description: formResult.description,
-          ),
-        );
-
-        if (!mounted) {
-          return;
-        }
-
-        setState(() {
-          _courses = [created, ..._courses];
-        });
-
-        _showMessage('Course added successfully.');
-      } else {
-        final updated = await _courseApiService.updateCourse(
-          existing.copyWith(
-            title: formResult.title,
-            description: formResult.description,
-          ),
-        );
-
-        if (!mounted) {
-          return;
-        }
-
-        setState(() {
-          _courses = _courses
-              .map((course) => course.id == existing.id ? updated : course)
-              .toList();
-        });
-
-        _showMessage('Course updated successfully.');
-      }
-    });
   }
 
   Future<void> _deleteCourse(CourseModel course) async {
@@ -158,44 +116,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       },
     );
 
-    if (confirmed != true) {
-      return;
-    }
+    if (confirmed != true) return;
 
-    await _runSubmission(() async {
-      await _courseApiService.deleteCourse(courseId);
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _courses = _courses.where((item) => item.id != courseId).toList();
-      });
-
-      _showMessage('Course deleted successfully.');
-    });
-  }
-
-  Future<void> _runSubmission(Future<void> Function() operation) async {
-    setState(() {
-      _isSubmitting = true;
-    });
-
-    try {
-      await operation();
-    } catch (e) {
-      _showMessage(e.toString(), isError: true);
-    } finally {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isSubmitting = false;
-      });
-    }
+    final provider = context.read<CourseProvider>();
+    await provider.deleteCourse(course);
+    _showMessage(
+      provider.errorMessage ?? 'Course deleted successfully.',
+      isError: provider.errorMessage != null,
+    );
   }
 
   void _showMessage(String message, {bool isError = false}) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -208,137 +140,185 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final user = _authController.currentUser;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        title: const Text(
-          'Dashboard',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: const Color(0xFF6C63FF),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: () => _showLogoutDialog(context),
+    return Consumer<CourseProvider>(
+      builder: (context, provider, _) {
+        return Scaffold(
+          backgroundColor: const Color(0xFFF5F5F5),
+          appBar: AppBar(
+            title: const Text(
+              'Dashboard',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: const Color(0xFF6C63FF),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            automaticallyImplyLeading: false,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.logout),
+                tooltip: 'Logout',
+                onPressed: () => _showLogoutDialog(context),
+              ),
+            ],
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCourseForm(),
-        backgroundColor: const Color(0xFF6C63FF),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Course'),
-      ),
-      body: Stack(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () => _showCourseForm(),
+            backgroundColor: const Color(0xFF6C63FF),
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.add),
+            label: const Text('Add Course'),
+          ),
+          body: Stack(
             children: [
-              Container(
-                width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF6C63FF),
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(30),
-                    bottomRight: Radius.circular(30),
-                  ),
-                ),
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 35,
-                      backgroundColor: Colors.white.withValues(alpha: 0.2),
-                      child: Text(
-                        user?.fullName.substring(0, 1).toUpperCase() ?? 'U',
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Profile header ──────────────────────────────────────
+                  Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF6C63FF),
+                      borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(30),
+                        bottomRight: Radius.circular(30),
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Hello, ${user?.fullName ?? 'User'}!',
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 35,
+                          backgroundColor: Colors.white.withValues(alpha: 0.2),
+                          child: Text(
+                            user?.fullName.substring(0, 1).toUpperCase() ?? 'U',
                             style: const TextStyle(
-                              fontSize: 22,
+                              fontSize: 28,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            user?.email ?? '',
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Hello, ${user?.fullName ?? 'User'}!',
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                user?.email ?? '',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white.withValues(alpha: 0.8),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // ── Section heading + refresh ────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 20, 16, 4),
+                    child: Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Courses (JSONPlaceholder API)',
                             style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.white.withValues(alpha: 0.8),
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF333333),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 16, 8),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Courses (JSONPlaceholder API)',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF333333),
                         ),
+                        if (provider.status == CourseStateStatus.success ||
+                            provider.status == CourseStateStatus.error)
+                          IconButton(
+                            onPressed: provider.status == CourseStateStatus.loading
+                                ? null
+                                : () => provider.fetchCourses(),
+                            tooltip: 'Refresh',
+                            icon: const Icon(Icons.refresh),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  // ── Search bar ────────────────────────────────────────────
+                  if (provider.status == CourseStateStatus.success &&
+                      provider.courses.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Search courses by title or description…',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: provider.searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    provider.setSearchQuery('');
+                                  },
+                                )
+                              : null,
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+                          isDense: true,
+                        ),
+                        onChanged: provider.setSearchQuery,
                       ),
                     ),
-                    IconButton(
-                      onPressed: _isLoading ? null : _fetchCourses,
-                      tooltip: 'Refresh',
-                      icon: const Icon(Icons.refresh),
+
+                  Expanded(
+                    child: _buildBodyState(provider),
+                  ),
+                ],
+              ),
+
+              // ── Submitting overlay ────────────────────────────────────────
+              if (provider.isSubmitting)
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    child: const Center(
+                      child: CircularProgressIndicator(),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-              Expanded(
-                child: _buildBodyState(),
-              ),
             ],
           ),
-          if (_isSubmitting)
-            Positioned.fill(
-              child: ColoredBox(
-                color: Colors.black.withValues(alpha: 0.2),
-                child: const Center(
-                  child: CircularProgressIndicator(),
-                ),
-              ),
-            ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildBodyState() {
-    if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+  Widget _buildBodyState(CourseProvider provider) {
+    // Loading state
+    if (provider.status == CourseStateStatus.loading) {
+      return const Center(child: CircularProgressIndicator());
     }
 
-    if (_errorMessage != null) {
+    // Error state (only when no courses are available)
+    if (provider.status == CourseStateStatus.error &&
+        provider.courses.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -348,13 +328,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const Icon(Icons.error_outline, size: 48, color: Colors.red),
               const SizedBox(height: 12),
               Text(
-                _errorMessage!,
+                provider.errorMessage ?? 'An unexpected error occurred.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Color(0xFF666666)),
               ),
               const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: _fetchCourses,
+                onPressed: () => provider.fetchCourses(),
                 child: const Text('Retry'),
               ),
             ],
@@ -363,31 +343,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
-    if (_courses.isEmpty) {
+    final displayCourses = provider.filteredCourses;
+
+    // Empty state
+    if (displayCourses.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.inbox_outlined, size: 48, color: Color(0xFF999999)),
-            const SizedBox(height: 10),
-            const Text('No courses available.'),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: _fetchCourses,
-              child: const Text('Fetch Courses'),
+            Icon(
+              provider.searchQuery.isNotEmpty
+                  ? Icons.search_off
+                  : Icons.inbox_outlined,
+              size: 48,
+              color: const Color(0xFF999999),
             ),
+            const SizedBox(height: 10),
+            Text(
+              provider.searchQuery.isNotEmpty
+                  ? 'No courses match "${provider.searchQuery}".'
+                  : 'No courses available.',
+            ),
+            if (provider.searchQuery.isEmpty) ...[
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () => provider.fetchCourses(),
+                child: const Text('Fetch Courses'),
+              ),
+            ],
           ],
         ),
       );
     }
 
+    // Success / list with pull-to-refresh
     return RefreshIndicator(
-      onRefresh: _fetchCourses,
+      onRefresh: () => provider.fetchCourses(),
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 90),
-        itemCount: _courses.length,
+        itemCount: displayCourses.length,
         itemBuilder: (context, index) {
-          final course = _courses[index];
+          final course = displayCourses[index];
           return _buildCourseCard(context, course, index);
         },
       ),
@@ -411,11 +407,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
-          Navigator.pushNamed(
-            context,
-            '/detail',
-            arguments: course,
-          );
+          Navigator.pushNamed(context, '/detail', arguments: course);
         },
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -428,11 +420,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  icon,
-                  size: 32,
-                  color: color,
-                ),
+                child: Icon(icon, size: 32, color: color),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -531,16 +519,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
+// ── Course form data holder ────────────────────────────────────────────────
+
 class _CourseFormData {
   const _CourseFormData({required this.title, required this.description});
-
   final String title;
   final String description;
 }
 
+// ── Course form dialog (unchanged UI, just uses Provider for submission) ──
+
 class _CourseFormDialog extends StatefulWidget {
   const _CourseFormDialog({this.existing});
-
   final CourseModel? existing;
 
   @override
@@ -627,10 +617,7 @@ class _CourseFormDialogState extends State<_CourseFormDialog> {
         ),
         ElevatedButton(
           onPressed: () {
-            if (!_formKey.currentState!.validate()) {
-              return;
-            }
-
+            if (!_formKey.currentState!.validate()) return;
             Navigator.pop(
               context,
               _CourseFormData(
