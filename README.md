@@ -10,6 +10,12 @@ Name: Hammad
 
 Registration ID: SE-221046
 
+# Student Info
+
+Name: Hammad
+
+Registration ID: SE-221046
+
 ## Overview
 
 This app follows a basic user journey:
