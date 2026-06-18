@@ -1,40 +1,48 @@
 import 'package:flutter/material.dart';
-import '../models/subject_model.dart';
+import '../models/course_model.dart';
 
 class DetailScreen extends StatelessWidget {
   const DetailScreen({super.key});
 
-  Color _getSubjectColor(String name) {
-    switch (name) {
-      case 'Mobile App Development':
-        return const Color(0xFF6C63FF);
-      case 'Software Re-engineering':
-        return const Color(0xFFFF6B6B);
-      case 'MIS':
-        return const Color(0xFF4ECDC4);
-      default:
-        return const Color(0xFF6C63FF);
+  Color _resolveColor(int? id) {
+    const colors = [
+      Color(0xFF6C63FF),
+      Color(0xFFFF6B6B),
+      Color(0xFF4ECDC4),
+      Color(0xFF3A86FF),
+      Color(0xFFFF9F1C),
+      Color(0xFF2EC4B6),
+    ];
+
+    if (id == null) {
+      return colors.first;
     }
+
+    return colors[id % colors.length];
   }
 
-  IconData _getSubjectIcon(String name) {
-    switch (name) {
-      case 'Mobile App Development':
-        return Icons.phone_android;
-      case 'Software Re-engineering':
-        return Icons.engineering;
-      case 'MIS':
-        return Icons.business;
-      default:
-        return Icons.book;
+  IconData _resolveIcon(int? id) {
+    const icons = [
+      Icons.menu_book,
+      Icons.school,
+      Icons.data_object,
+      Icons.code,
+      Icons.analytics,
+      Icons.computer,
+    ];
+
+    if (id == null) {
+      return icons.first;
     }
+
+    return icons[id % icons.length];
   }
 
   @override
   Widget build(BuildContext context) {
-    final subject = ModalRoute.of(context)!.settings.arguments as SubjectModel;
-    final color = _getSubjectColor(subject.name);
-    final icon = _getSubjectIcon(subject.name);
+    final course = ModalRoute.of(context)!.settings.arguments as CourseModel;
+    final color = _resolveColor(course.id);
+    final icon = _resolveIcon(course.id);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
@@ -47,7 +55,7 @@ class DetailScreen extends StatelessWidget {
             foregroundColor: Colors.white,
             flexibleSpace: FlexibleSpaceBar(
               title: Text(
-                subject.name,
+                'Course #${course.id ?? '-'}',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -81,11 +89,11 @@ class DetailScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildSectionCard(
-                    title: 'About This Course',
+                    title: 'Course Title',
                     icon: Icons.info_outline,
                     color: color,
                     child: Text(
-                      subject.description,
+                      course.title,
                       style: const TextStyle(
                         fontSize: 15,
                         height: 1.6,
@@ -95,48 +103,16 @@ class DetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   _buildSectionCard(
-                    title: 'Schedule',
+                    title: 'Description',
                     icon: Icons.schedule,
                     color: color,
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            Icons.calendar_today,
-                            color: color,
-                            size: 24,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Class Timing',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF888888),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                subject.schedule,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF333333),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      course.description,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        height: 1.6,
+                        color: Color(0xFF555555),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -146,11 +122,11 @@ class DetailScreen extends StatelessWidget {
                     color: color,
                     child: Column(
                       children: [
-                        _buildDetailRow(Icons.category, 'Subject', subject.name, color),
+                        _buildDetailRow(Icons.tag, 'Course ID', '${course.id ?? 'N/A'}', color),
                         const Divider(height: 24),
-                        _buildDetailRow(Icons.access_time, 'Duration', 'Semester Course', color),
+                        _buildDetailRow(Icons.person, 'Owner User ID', '${course.userId ?? 'N/A'}', color),
                         const Divider(height: 24),
-                        _buildDetailRow(Icons.school, 'Level', 'Undergraduate', color),
+                        _buildDetailRow(Icons.cloud_done, 'Source', 'JSONPlaceholder /posts', color),
                       ],
                     ),
                   ),
