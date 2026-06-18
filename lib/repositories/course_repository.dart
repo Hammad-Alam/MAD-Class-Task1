@@ -35,23 +35,19 @@ class CourseRepository {
   /// • If the API call fails (e.g. Chrome DevTools throttling), falls back
   ///   to the local cache instead of throwing.
   Future<List<CourseModel>> fetchCourses({int limit = 20}) async {
-    final online = await _isOnline;
-    print('[Repository] _isOnline = $online');
-
-    if (online) {
+    if (await _isOnline) {
       try {
         final courses = await _apiService.fetchCourses(limit: limit);
         await _localDb.cacheCourses(courses);
-        print('[Repository] API success → cached ${courses.length} courses');
         return courses;
-      } catch (e) {
-        print('[Repository] API failed ($e) → falling back to cache');
+      } catch (_) {
+        // API unreachable despite connectivity check (e.g. web throttling).
+        // Fall through to cache.
       }
     }
 
-    final cached = _localDb.getCachedCourses();
-    print('[Repository] Serving ${cached.length} courses from cache');
-    return cached;
+    // Offline or API failed – serve from cache
+    return _localDb.getCachedCourses();
   }
 
   // ── Add ───────────────────────────────────────────────────────────────────
