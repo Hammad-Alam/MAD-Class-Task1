@@ -4,6 +4,8 @@ A Flutter multi-screen demo application built for classroom-style learning and p
 
 The app now also integrates REST APIs (JSONPlaceholder) for course management with full CRUD operations (Create, Read, Update, Delete).
 
+This project has been further enhanced with **offline-first support**, **persistent local storage (Hive)**, **Provider-based state management**, a **clean repository pattern architecture**, and **optimistic UI updates with rollback**.
+
 # Student Info
 
 Name: Hammad
@@ -43,6 +45,12 @@ All user auth data is stored temporarily in memory through a singleton controlle
 - Loading, error, retry, and submit states for network actions.
 - Material 3 UI with a consistent purple-themed design.
 - Named-route navigation between screens.
+- **Offline-first data loading** — courses served from Hive cache when offline.
+- **Provider-based state management** — replaces `setState` with `ChangeNotifier`.
+- **Repository pattern** — clean separation: UI → Provider → Repository → API/LocalDB.
+- **Optimistic UI updates** — instant add/edit/delete with automatic rollback on failure.
+- **Search/filter** — real-time case-insensitive course filtering by title or description.
+- **Pull-to-refresh** — swipe down to refetch courses from the API.
 
 ## API Integration
 
@@ -62,6 +70,8 @@ Note: JSONPlaceholder is a fake REST API. Requests return success responses for 
 
 ## App Screenshots
 
+### Base App (Registration, Login, CRUD)
+
 <p align="center">
   <img src="app_ss/Register.png" width="45%" />
   <img src="app_ss/Login.png" width="45%" />
@@ -78,12 +88,32 @@ Note: JSONPlaceholder is a fake REST API. Requests return success responses for 
   <img src="app_ss/Delete_Course.png" width="45%" />
 </p>
 
+### Extension (Offline Support, State Management, Search)
+
+<p align="center">
+  <img src="app_ss/Courses_Online.png" width="45%" />
+  <img src="app_ss/Courses_Offline.png" width="45%" />
+</p>
+
+<p align="center">
+  <img src="app_ss/Search_Course_Offline.png" width="45%" />
+  <img src="app_ss/Add_Course_Offline.png" width="45%" />
+</p>
+
+<p align="center">
+  <img src="app_ss/Update_Course_Offline.png" width="45%" />
+  <img src="app_ss/Delete_Course_Offline.png" width="45%" />
+</p>
+
 ## Tech Stack
 
 - Flutter SDK
 - Dart
 - Material 3 widgets
 - `http` for REST API requests
+- `provider` for state management (ChangeNotifier pattern)
+- `hive` + `hive_flutter` for offline local storage
+- `connectivity_plus` for network connectivity detection
 - `flutter_lints` for static analysis
 
 ## Project Structure
@@ -108,16 +138,22 @@ flutter_app/
 
 ### `lib/`
 
-The application code is split into smaller folders:
+The application code is split into smaller folders following clean architecture:
 
 ```text
 lib/
-├── main.dart                # App bootstrap, theme, and route configuration
+├── main.dart                # App bootstrap, Hive init, Provider setup, routes
 ├── controllers/             # In-memory auth logic
-├── enums/                   # Enum definitions for auth and gender
+├── enums/                   # Enum definitions (AuthStatus, Gender, CourseStateStatus)
 ├── models/                  # Data models for users, subjects, and courses
+├── providers/               # ChangeNotifier classes for state management
+│   └── course_provider.dart # Manages courses, search, optimistic updates, rollback
+├── repositories/            # Repository pattern (decides API vs local storage)
+│   └── course_repository.dart
 ├── screens/                 # UI screens for each page
-├── services/                # API service layer
+├── services/                # API service layer and local database service
+│   ├── course_api_service.dart
+│   └── local_database_service.dart
 └── validators/              # Reusable form validation helpers
 ```
 
@@ -169,20 +205,59 @@ The detail page renders:
 - Course ID and owner user ID
 - Data source reference
 
-## Architecture Notes
+## Architecture
 
-This project uses a very simple architecture:
+### Architecture Overview (Extension)
+
+The app follows a layered **Repository Pattern** with clear separation of concerns:
+
+```
+UI (Screens)
+    ↓  Consumer<CourseProvider>
+CourseProvider (State Management — ChangeNotifier)
+    ↓  delegates data operations
+CourseRepository (Repository — decides data source)
+    ↓               ↓
+CourseApiService   LocalDatabaseService
+  (HTTP only)        (Hive cache)
+```
+
+**Responsibilities:**
+
+- **UI layer** — Screens consume state via `Consumer<CourseProvider>` and call provider methods.
+- **CourseProvider** — Manages loading/success/error/empty states, search query, optimistic UI updates with snapshot-based rollback.
+- **CourseRepository** — Checks connectivity, decides between API and local cache, handles try-catch fallback.
+- **CourseApiService** — Pure HTTP operations only (GET, POST, PUT, DELETE).
+- **LocalDatabaseService** — Hive box wrapper for caching courses as JSON.
+
+### Offline-First Strategy
+
+1. On fetch: if online → call API → cache result in Hive → return.
+2. On fetch: if offline → return cached data from Hive.
+3. If API fails despite connectivity check (e.g. Chrome DevTools throttling) → fall back to cache.
+4. On add/update/delete: try API first → sync locally. On failure → apply changes locally only.
+
+### Optimistic UI Updates
+
+All CRUD operations update the UI immediately before the API call completes:
+
+- **Add** — new course inserted at top with a temporary ID.
+- **Update** — course data replaced in-place.
+- **Delete** — course removed from the list.
+
+If the API call fails, the previous state is restored automatically (rollback).
+
+### Base Architecture (Original)
 
 - `AuthController` is a singleton that stores registered users and session state.
 - `CourseApiService` contains all API request logic (service layer).
-- `UserModel`, `SubjectModel`, and `CourseModel` represent the app’s data.
+- `UserModel`, `SubjectModel`, and `CourseModel` represent the app's data.
 - `FormValidator` keeps validation logic separate from UI code.
-- `Gender` and `AuthStatus` keep domain values explicit and readable.
+- `Gender`, `AuthStatus`, and `CourseStateStatus` keep domain values explicit and readable.
 
-State handling on dashboard includes explicit loading, error, success, and submitting states.
+State handling on dashboard includes explicit loading, error, success, and submitting states managed by `CourseProvider`.
 
-Because the state is stored in memory, all data is lost when the app restarts.
-That is fine for a learning project, but it is not suitable for production authentication.
+Auth data is stored in memory (lost on restart). Course data is persisted locally via Hive cache.
 
 ## Routing
 
@@ -237,14 +312,16 @@ Stores API-mapped fields:
 
 ## Dependencies
 
-The project currently uses only a small set of dependencies:
-
-- `flutter`
-- `cupertino_icons`
-- `http`
-- `flutter_lints`
-
-Networking is handled through the `http` package and a dedicated service layer.
+| Package | Purpose |
+|---------|----------|
+| `flutter` | Flutter SDK |
+| `cupertino_icons` | iOS-style icons |
+| `http` | REST API requests |
+| `provider` | State management via ChangeNotifier |
+| `hive` | Lightweight NoSQL local database |
+| `hive_flutter` | Flutter integration for Hive (init, path handling) |
+| `connectivity_plus` | Network connectivity detection |
+| `flutter_lints` | Static analysis rules |
 
 ## Getting Started
 
@@ -280,15 +357,20 @@ Store screenshots in `app_ss`.
 
 ## Branches
 
-main - Default
-feature/course-api-integration - For Course CRUD
+| Branch | Description |
+|--------|-------------|
+| `main` | Default / base app |
+| `feature/course-api-integration` | Course CRUD with JSONPlaceholder API |
+| `feature/offline-cache-and-state-manangement` | Offline support, Provider state management, repository pattern |
 
 ## Notes on the Current Codebase
 
 - The app is currently a teaching/demo project, not a production auth system.
-- User data is not persisted across app launches.
-- The default test file still contains Flutter’s template counter test and can be replaced with app-specific tests.
-- Course CRUD uses JSONPlaceholder, which is designed for testing and does not permanently persist changes.
+- User auth data is not persisted across app launches (in-memory only).
+- Course data is cached locally via Hive and survives app restarts.
+- The default test file still contains Flutter's template counter test and can be replaced with app-specific tests.
+- Course CRUD uses JSONPlaceholder, which is designed for testing and does not permanently persist changes on the server.
+- On Flutter Web, use a fixed dev server port (`--web-port=3000`) to ensure Hive cache persists across restarts.
 
 ## Documentation References
 
