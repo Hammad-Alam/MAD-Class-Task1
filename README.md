@@ -1,4 +1,4 @@
-# Project Title - Flutter Multi-Screen App
+# Project Title - Flutter Application
 
 A Flutter multi-screen demo application built for classroom-style learning and practice. It demonstrates a simple registration and login flow, an authenticated dashboard, and a detail screen for course/subject information. The project is intentionally lightweight and uses in-memory auth state, which makes it easy to understand and extend.
 
